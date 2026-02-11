@@ -1,7 +1,6 @@
 import { useState } from "react";
 import sunImage from "../assets/sun.png";
 import moonImage from "../assets/moon.png";
-import tailwindcss from '@tailwindcss/vite'
 
 export default function Game({ n }) {
 
