@@ -149,14 +149,14 @@ function pickRandomRelations(n, relations) {
   let min, max;
 
   if (n === 4) {
-    min = 2;
-    max = 4;
-  } else if (n === 6) {
     min = 3;
-    max = 6;
-  } else if (n === 8) {
-    min = 4;
+    max = 5;
+  } else if (n === 6) {
+    min = 5;
     max = 8;
+  } else if (n === 8) {
+    min = 7;
+    max = 12;
   } else {
     min = Math.floor(n / 2);
     max = n + 2;
@@ -243,8 +243,9 @@ function shuffleColumns(board) {
 // GAME VALIDATION (FOR PLAYER BOARD)
 // ============================================
 
-export function validateBoard(board) {
+export function validateBoard(board, relations) {
   const n = board.length;
+  const errors = [];
 
   // Check rows
   for (let i = 0; i < n; i++) {
@@ -253,15 +254,24 @@ export function validateBoard(board) {
     const sunCount = row.filter(v => v === "sun").length;
     const moonCount = row.filter(v => v === "moon").length;
 
-    if (sunCount > n / 2 || moonCount > n / 2) return false;
+    if (sunCount > n / 2 || moonCount > n / 2) {
+      for (let j = 0; j < n; j++) {
+        if (row[j]) {
+          errors.push({ pos: [i, j], type: 'count' });
+        }
+      }
+    }
 
+    // Check for three consecutive same icons in row
     for (let j = 0; j < n - 2; j++) {
       if (
         row[j] &&
         row[j] === row[j + 1] &&
         row[j] === row[j + 2]
       ) {
-        return false;
+        errors.push({ pos: [i, j], type: 'three' });
+        errors.push({ pos: [i, j + 1], type: 'three' });
+        errors.push({ pos: [i, j + 2], type: 'three' });
       }
     }
   }
@@ -277,20 +287,65 @@ export function validateBoard(board) {
     const sunCount = col.filter(v => v === "sun").length;
     const moonCount = col.filter(v => v === "moon").length;
 
-    if (sunCount > n / 2 || moonCount > n / 2) return false;
+    if (sunCount > n / 2 || moonCount > n / 2) {
+      for (let i = 0; i < n; i++) {
+        if (col[i]) {
+          errors.push({ pos: [i, j], type: 'count' });
+        }
+      }
+    }
 
+    // Check for three consecutive same icons in column
     for (let i = 0; i < n - 2; i++) {
       if (
         col[i] &&
         col[i] === col[i + 1] &&
         col[i] === col[i + 2]
       ) {
-        return false;
+        errors.push({ pos: [i, j], type: 'three' });
+        errors.push({ pos: [i + 1, j], type: 'three' });
+        errors.push({ pos: [i + 2, j], type: 'three' });
       }
     }
   }
 
-  return true;
+  // Check relations (hints) - CRITICAL for Tango game
+  if (relations && relations.length > 0) {
+    for (let rel of relations) {
+      const [r1, c1] = rel.from;
+      const [r2, c2] = rel.to;
+      
+      const val1 = board[r1][c1];
+      const val2 = board[r2][c2];
+      
+      if (val1 && val2) {
+        if (rel.symbol === '=' && val1 !== val2) {
+          // Equal sign means they should be the same
+          errors.push({ pos: [r1, c1], type: 'hint' });
+          errors.push({ pos: [r2, c2], type: 'hint' });
+        } else if (rel.symbol === 'x' && val1 === val2) {
+          // X means they should be different
+          errors.push({ pos: [r1, c1], type: 'hint' });
+          errors.push({ pos: [r2, c2], type: 'hint' });
+        }
+      }
+    }
+  }
+
+  return { isValid: errors.length === 0, errors };
 }
 
+export function checkWin(board, relations) {
+  const n = board.length;
 
+  // 1) must be fully filled (no falsy values)
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (!board[i][j]) return false;
+    }
+  }
+
+  // 2) must satisfy all validation rules (rows, columns, relation hints)
+  const { isValid } = validateBoard(board, relations);
+  return !!isValid;
+}
