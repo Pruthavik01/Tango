@@ -1,18 +1,41 @@
-import { useState } from "react";
+// src/components/Game.js
+import { useState, useMemo, useEffect } from "react";
+
 import sunImage from "../assets/sun.png";
 import moonImage from "../assets/moon.png";
+import { generatePuzzle, validateBoard } from "./generate";
 
 export default function Game({ n }) {
-
   const grid = Array(n).fill(null);
-  const [name, setName] = useState(
-    Array.from({ length: n }, () => Array(n).fill(""))
-  );
 
-  const relations = [
-    { from: [0, 0], to: [0, 1], symbol: "=" }, // horizontal
-    { from: [1, 1], to: [2, 1], symbol: "x" }, // vertical
-  ];
+  // generate puzzle (solution, relations, prefills)
+  const { solution, relations, prefills } = useMemo(() => {
+    return generatePuzzle(n);
+  }, [n]);
+
+  // initial player grid: place prefilled icons in the starting state
+  const [name, setName] = useState(() => {
+    const arr = Array.from({ length: n }, () => Array(n).fill(""));
+    if (prefills && prefills.length) {
+      for (let p of prefills) {
+        const [i, j] = p.pos;
+        arr[i][j] = p.value;
+      }
+    }
+    return arr;
+  });
+
+  // locked cells grid (true for prefilled/hint cells)
+  const locked = useMemo(() => {
+    const lockArr = Array.from({ length: n }, () => Array(n).fill(false));
+    if (prefills && prefills.length) {
+      for (let p of prefills) {
+        const [i, j] = p.pos;
+        lockArr[i][j] = true;
+      }
+    }
+    return lockArr;
+  }, [prefills, n]);
 
   const getRelation = (i, j) => {
     for (let rel of relations) {
@@ -32,21 +55,20 @@ export default function Game({ n }) {
     return null;
   };
 
-
-
   const iconMap = {
     sun: sunImage,
     moon: moonImage,
   };
 
   const addicon = (i, j) => {
-    setName((prev) => {
-      const newArray = [...prev]; // copy outer array
-      newArray[i] = [...newArray[i]]; // copy inner array
+    // locked cells are hints — don't allow changes
+    if (locked[i][j]) return;
 
-      if (newArray[i][j] == "sun") {
+    setName((prev) => {
+      const newArray = prev.map((row) => row.slice()); // deep copy
+      if (newArray[i][j] === "sun") {
         newArray[i][j] = "moon";
-      } else if (newArray[i][j] == "moon") {
+      } else if (newArray[i][j] === "moon") {
         newArray[i][j] = "";
       } else {
         newArray[i][j] = "sun";
@@ -55,37 +77,59 @@ export default function Game({ n }) {
     });
   };
 
+  useEffect(() => {
+    const valid = validateBoard(name);
+
+    if (!valid) {
+      console.log("Invalid move");
+      return;
+    }
+
+    const isFull = name.every(row => row.every(cell => cell !== ""));
+
+    if (isFull) {
+      alert("🎉 You solved it!");
+    }
+
+  }, [name]);
+
+
+
   return (
     <div className="inline-block">
       {grid.map((_, i) => (
         <div key={i} className="flex">
           {grid.map((_, j) => {
             const relation = getRelation(i, j);
+            const isLocked = locked[i][j];
 
             return (
               <div
                 key={j}
                 onClick={() => addicon(i, j)}
-                className="relative w-16 h-16 border border-gray-400 flex items-center justify-center cursor-pointer"
+                className={`relative w-16 h-16 border border-gray-400 flex items-center justify-center cursor-pointer select-none
+                  ${isLocked ? "bg-gray-50 cursor-default ring-1 ring-indigo-200" : "hover:bg-gray-100"}`}
+                title={isLocked ? "Given hint" : "Click to toggle sun/moon"}
               >
                 {/* ICON */}
                 {name[i][j] && (
                   <img
                     src={iconMap[name[i][j]]}
                     alt=""
-                    className="w-2/3 h-2/3 object-contain"
+                    className={`w-2/3 h-2/3 object-contain ${isLocked ? "opacity-95" : "opacity-100"}`}
+                    draggable="false"
                   />
                 )}
 
                 {/* RELATION SYMBOL */}
                 {relation && relation.direction === "right" && (
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-white px-1 text-lg font-bold z-10">
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-white rounded-md text-md font-bold z-10 pointer-events-none select-none">
                     {relation.symbol}
                   </div>
                 )}
 
                 {relation && relation.direction === "down" && (
-                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-white px-1 text-lg font-bold z-10">
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 bg-white text-lg font-bold z-10 pointer-events-none select-none">
                     {relation.symbol}
                   </div>
                 )}
